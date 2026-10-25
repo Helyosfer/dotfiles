@@ -72,7 +72,9 @@ bagla() {
 [ "${1:-}" = "--sadece-baglanti" ] || { paketleri_kur; pokemon_kur; }
 for p in kitty fish; do bagla "$p"; done
 
-if [ "$(basename "${SHELL:-}")" != fish ]; then
+# $SHELL o anki oturumdan gelir; asıl giriş kabuğu passwd kaydındadır.
+giris_kabugu="$(getent passwd "$(id -un)" | cut -d: -f7)"
+if [ "$(basename "${giris_kabugu:-$SHELL}")" != fish ]; then
   uyari "Varsayılan kabuk fish değil. Değiştirmek için: chsh -s \"\$(command -v fish)\""
 fi
 bilgi "Bitti. Yeni bir kitty penceresi aç."
