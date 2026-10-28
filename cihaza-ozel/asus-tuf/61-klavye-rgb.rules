@@ -1,0 +1,4 @@
+# ASUS TUF A16 klavye aydınlatma denetleyicisi (ITE 0B05:19B6, I2C HID):
+# oturum açan kullanıcı hidraw'a yazabilsin; klavye-rgb sonraki/onceki root istemesin.
+# Kapsam yalnızca bu aygıtla sınırlı; ana klavye (AT Translated Set 2) etkilenmez.
+SUBSYSTEM=="hidraw", KERNELS=="0018:0B05:19B6.*", TAG+="uaccess"

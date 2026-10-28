@@ -1,0 +1,13 @@
+[Unit]
+Description=ASUS TUF A16: klavye aydınlatmasına açılış rengini ver (HID LampArray)
+After=systemd-udev-settle.service
+After=sleep.target
+
+[Service]
+Type=oneshot
+# Denetleyici (I2C HID) geç görünebilir; en fazla 30 sn bekle.
+ExecStart=/bin/sh -c 'for i in $(seq 30); do /usr/bin/python3 -I /usr/local/bin/klavye-rgb varsayilan && exit 0; sleep 1; done; exit 1'
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=sleep.target

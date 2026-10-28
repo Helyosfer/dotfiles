@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Komutu, güç profiline göre iGPU (AMD) veya dGPU (NVIDIA) ile başlatır.
+#
+#   gpu-run [-i|-d] komut [argümanlar...]
+#
+#   power-saver  -> iGPU'ya zorlanır, uygulama dGPU'yu göremez (dGPU uyur)
+#   performance  -> dGPU'ya zorlanır
+#   balanced     -> dokunulmaz: uygulama kendi seçer, dGPU istenince uyanır, iş bitince uyur
+#   -i / -d      -> profili yok sayıp iGPU / dGPU'yu zorlar
+#
+# Profil uygulama BAŞLARKEN okunur; çalışan uygulama GPU değiştirmez.
+# KWin (masaüstü) hep iGPU'da kalır; o canlı değişemez (bkz. kwin-gpu.conf).
+set -eu
+
+MESA_EGL=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+
+igpu() {
+  export DRI_PRIME=0
+  export __GLX_VENDOR_LIBRARY_NAME=mesa
+  export __EGL_VENDOR_LIBRARY_FILENAMES="$MESA_EGL"
+  export VK_LOADER_DRIVERS_SELECT='radeon*'
+  export CUDA_VISIBLE_DEVICES=-1
+}
+
+dgpu() {
+  export __NV_PRIME_RENDER_OFFLOAD=1
+  export __GLX_VENDOR_LIBRARY_NAME=nvidia
+  export __VK_LAYER_NV_optimus=NVIDIA_only
+  export VK_LOADER_DRIVERS_SELECT='nvidia*'
+}
+
+mod=profil
+case "${1:-}" in
+  -i) mod=igpu; shift ;;
+  -d) mod=dgpu; shift ;;
+  -h|--help|"") sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+if [ "$mod" = profil ]; then
+  case "$(powerprofilesctl get 2>/dev/null || echo balanced)" in
+    power-saver) mod=igpu ;;
+    performance) mod=dgpu ;;
+    *)           mod=dokunma ;;
+  esac
+fi
+
+case "$mod" in
+  igpu) igpu ;;
+  dgpu) dgpu ;;
+esac
+
+exec "$@"

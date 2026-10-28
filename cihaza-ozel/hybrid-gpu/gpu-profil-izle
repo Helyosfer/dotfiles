@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Güç profili değişince, çalışan Steam başka profildeki GPU ayarıyla açılmışsa
+# bildirim gönderir (gpu-run profili uygulama başlarken okuduğu için Steam'in yeniden açılması gerekir).
+#
+#   gpu-profil-izle            profil değişimlerini izler (systemd kullanıcı servisi bunu çalıştırır)
+#   gpu-profil-izle --kontrol  tek seferlik kontrol; bildirim yerine sonucu yazdırır
+set -u
+
+# Steam'in hangi profil moduyla açıldığını ortamındaki gpu-run değişkenlerinden çıkarır.
+steam_modu() {
+  local pid sec
+  pid="$(pgrep -x steam | head -1)"
+  [ -n "$pid" ] || return 1
+  sec="$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^VK_LOADER_DRIVERS_SELECT=//p')"
+  case "$sec" in
+    radeon*) echo power-saver ;;
+    nvidia*) echo performance ;;
+    *)       echo balanced ;;
+  esac
+}
+
+kontrol() {
+  local simdiki steam
+  simdiki="$(powerprofilesctl get 2>/dev/null)" || return 0
+  steam="$(steam_modu)" || return 0   # Steam çalışmıyorsa uyarılacak bir şey yok
+  [ "$simdiki" != "$steam" ] || return 0
+
+  local mesaj="Steam '$steam' profiliyle açılmış, şimdiki profil '$simdiki'. GPU seçimi uygulama açılırken yapılır; Steam'i tamamen kapatıp yeniden aç."
+  if [ "${1:-}" = "--kontrol" ]; then
+    echo "UYUMSUZ: $mesaj"
+  else
+    notify-send -a gpu-run -i video-display -u normal "Güç profili değişti" "$mesaj"
+  fi
+  return 0
+}
+
+if [ "${1:-}" = "--kontrol" ]; then
+  kontrol --kontrol
+  [ -n "$(steam_modu)" ] && echo "Steam: $(steam_modu), profil: $(powerprofilesctl get)"
+  exit 0
+fi
+
+# Profil değişikliği ActiveProfile özelliğinin PropertiesChanged sinyaliyle gelir.
+gdbus monitor --system --dest org.freedesktop.UPower.PowerProfiles |
+  while IFS= read -r satir; do
+    case "$satir" in
+      *ActiveProfile*) kontrol ;;
+    esac
+  done

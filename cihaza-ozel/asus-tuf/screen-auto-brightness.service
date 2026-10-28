@@ -1,0 +1,11 @@
+[Unit]
+Description=ASUS TUF A16: BIOS otomatik parlaklığını kapat
+After=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+# asus-armoury yolu modül yüklenince oluşur; en fazla 30 sn bekle.
+ExecStart=/bin/sh -c 'p=/sys/class/firmware-attributes/asus-armoury/attributes/screen_auto_brightness/current_value; for i in $(seq 30); do if [ -w "$p" ]; then echo 0 > "$p"; exit 0; fi; sleep 1; done; exit 1'
+
+[Install]
+WantedBy=multi-user.target

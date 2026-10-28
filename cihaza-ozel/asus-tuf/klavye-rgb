@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""ASUS TUF Gaming A16 (FA608UM) klavye aydınlatması: HID LampArray (Dynamic Lighting).
+
+Denetleyici ITE 0B05:19B6 (I2C), LampArray'i Feature raporlarıyla sunar:
+  0x41 özellikler, 0x45 aralık güncelleme, 0x46 otonom mod.
+Çekirdekte bu aygıt için sürücü yok; hidraw'a root ile yazılır, bellek kalıcı değildir.
+
+  sudo klavye-rgb bilgi              salt okunur: lamba sayısı ve türü
+  sudo klavye-rgb otonom 1           aydınlatmayı cihazın kendi yönetimine ver
+  sudo klavye-rgb otonom 0           ana bilgisayar kontrolü (renk göndermek için)
+  sudo klavye-rgb renk R G B [YOG]   tüm tuşları boya (0-255, yoğunluk varsayılan 255)
+  sudo klavye-rgb kapat              tüm tuşları söndür
+  klavye-rgb sonraki | onceki        paletteki sonraki/önceki renge geç (root gerekmez, bkz. udev kuralı)
+  klavye-rgb varsayilan              açılış rengini uygula (servis bunu kullanır)
+"""
+import fcntl
+import glob
+import os
+import struct
+import sys
+
+HID_ID = "0018:00000B05:000019B6"
+
+# Doygun renkler: LED'ler kanalları karıştırınca beyaza kayar, bu yüzden her renkte en az
+# bir kanal 0'a yakın tutulur (pastel tonlar klavyede soluk görünür).
+# sonraki/önceki bu sırayla döner. İlk renk açılış rengidir.
+PALET = [
+    ("amber", 255, 170, 0),
+    ("mor", 160, 0, 255),
+    ("mavi", 0, 70, 255),
+    ("turkuaz", 0, 255, 220),
+    ("yeşil", 0, 255, 40),
+    ("sarı", 255, 190, 0),
+    ("turuncu", 255, 60, 0),
+    ("kırmızı", 255, 0, 20),
+    ("pembe", 255, 0, 140),
+    ("beyaz", 255, 255, 255),
+]
+DURUM = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+                     "klavye-rgb", "indeks")
+
+
+def hidraw_bul():
+    for yol in sorted(glob.glob("/sys/class/hidraw/hidraw*")):
+        try:
+            with open(os.path.join(yol, "device/uevent")) as f:
+                if f"HID_ID={HID_ID}" in f.read():
+                    return "/dev/" + os.path.basename(yol)
+        except OSError:
+            continue
+    sys.exit(f"Klavye denetleyicisi bulunamadı (HID_ID={HID_ID}).")
+
+
+def _ioc(nr, boyut):
+    # _IOC(_IOC_READ | _IOC_WRITE, 'H', nr, boyut)
+    return (3 << 30) | (boyut << 16) | (ord("H") << 8) | nr
+
+
+def feature_yaz(fd, rapor_id, veri):
+    tampon = bytes([rapor_id]) + veri
+    fcntl.ioctl(fd, _ioc(0x06, len(tampon)), tampon)  # HIDIOCSFEATURE
+
+
+def feature_oku(fd, rapor_id, boyut):
+    tampon = bytearray(boyut + 1)
+    tampon[0] = rapor_id
+    fcntl.ioctl(fd, _ioc(0x07, len(tampon)), tampon)  # HIDIOCGFEATURE
+    return bytes(tampon[1:])
+
+
+def lamba_sayisi(fd):
+    veri = feature_oku(fd, 0x41, 22)
+    sayi, gen, yuk, der, tur, aralik = struct.unpack("<HIIIII", veri)
+    return sayi, gen, yuk, der, tur, aralik
+
+
+def otonom(fd, acik):
+    feature_yaz(fd, 0x46, bytes([1 if acik else 0]))
+
+
+def boya(fd, r, g, b, yog):
+    sayi = lamba_sayisi(fd)[0]
+    # bayrak: bit0 = LampUpdateComplete; LampIdStart(2) LampIdEnd(2) R G B Yoğunluk
+    veri = struct.pack("<BHHBBBB", 1, 0, sayi - 1, r, g, b, yog)
+    feature_yaz(fd, 0x45, veri)
+
+
+def indeks_oku():
+    try:
+        with open(DURUM) as f:
+            return int(f.read().strip()) % len(PALET)
+    except (OSError, ValueError):
+        return 0
+
+
+def indeks_yaz(i):
+    os.makedirs(os.path.dirname(DURUM), exist_ok=True)
+    with open(DURUM, "w") as f:
+        f.write(str(i))
+
+
+def palet_uygula(fd, i):
+    ad, r, g, b = PALET[i]
+    otonom(fd, False)
+    boya(fd, r, g, b, 255)
+    indeks_yaz(i)
+    print(f"renk: {ad} ({r} {g} {b})")
+
+
+def bayt(s):
+    n = int(s)
+    if not 0 <= n <= 255:
+        sys.exit("Renk ve yoğunluk 0-255 arasında olmalı.")
+    return n
+
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ("-h", "--help"):
+        print(__doc__)
+        return
+    yol = hidraw_bul()
+    try:
+        fd = os.open(yol, os.O_RDWR)
+    except PermissionError:
+        sys.exit(f"{yol} için root gerekli: sudo klavye-rgb ...")
+    with os.fdopen(fd, "r+b", buffering=0):
+        if a[0] == "bilgi":
+            sayi, gen, yuk, der, tur, aralik = lamba_sayisi(fd)
+            print(f"aygıt: {yol}\nlamba sayısı: {sayi}\ntür: {tur}\n"
+                  f"en küçük güncelleme aralığı: {aralik} µs")
+        elif a[0] == "otonom" and len(a) == 2:
+            otonom(fd, a[1] == "1")
+            print("otonom mod:", "açık (cihaz yönetiyor)" if a[1] == "1" else "kapalı (ana bilgisayar)")
+        elif a[0] == "renk" and len(a) in (4, 5):
+            otonom(fd, False)
+            boya(fd, bayt(a[1]), bayt(a[2]), bayt(a[3]), bayt(a[4]) if len(a) == 5 else 255)
+            print("renk gönderildi")
+        elif a[0] in ("sonraki", "onceki"):
+            adim = 1 if a[0] == "sonraki" else -1
+            palet_uygula(fd, (indeks_oku() + adim) % len(PALET))
+        elif a[0] == "varsayilan":
+            palet_uygula(fd, 0)
+        elif a[0] == "kapat":
+            otonom(fd, False)
+            boya(fd, 0, 0, 0, 0)
+            print("söndürüldü")
+        else:
+            sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main()

@@ -21,6 +21,16 @@ Tekrar çalıştırmak güvenlidir. Paket kurmadan yalnızca bağlantıları yen
 ~/dotfiles/install.sh --sadece-baglanti
 ```
 
+Cihaza özgü ayar (yalnızca AMD iGPU + NVIDIA dGPU'lu ASUS dizüstüde, varsayılan olarak kapalı):
+
+```bash
+~/dotfiles/install.sh --sadece-baglanti --hybrid-gpu
+```
+
+`cihaza-ozel/hybrid-gpu/` içindeki udev kuralı `/dev/dri/igpu` bağlantısını üretir, `kwin-gpu.conf` KWin'i yalnızca iGPU'ya sabitler. Böylece dGPU boşta uyur (~15 W yerine ~9 W). Bağlantı oluşmazsa KWin ayarı yazılmaz. Harici ekran dGPU'ya bağlıysa görüntü gelmeyebilir; o zaman `~/.config/environment.d/kwin-gpu.conf` silinir.
+
+`gpu-run` komutu da kurulur: güç profiline göre uygulamayı iGPU'da (power-saver), dGPU'da (performance) başlatır; balanced'ta uygulamaya dokunmaz. `gpu-run -i|-d komut` ile elle seçilir. Steam bu komutla açılır. Profil uygulama başlarken okunur, çalışan uygulama GPU değiştirmez.
+
 Varsayılan kabuk fish değilse betik sonunda `chsh` komutunu hatırlatır.
 
 ## İçerik

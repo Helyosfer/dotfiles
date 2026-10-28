@@ -69,8 +69,52 @@ bagla() {
   done < <(find "$DOTFILES/$paket" -type f -print0)
 }
 
-[ "${1:-}" = "--sadece-baglanti" ] || { paketleri_kur; pokemon_kur; }
+# --- 4. Cihaza özgü: AMD iGPU + NVIDIA dGPU'lu ASUS dizüstü ----------------
+# Yalnızca --hybrid-gpu ile çalışır. KWin'i iGPU'ya sabitler ki dGPU boşta uyuyabilsin.
+# KWIN_DRM_DEVICES ':' ile bölündüğü için by-path yolu kullanılamaz; udev kuralı
+# iGPU için ':' içermeyen /dev/dri/igpu bağlantısını üretir.
+hybrid_gpu_kur() {
+  local kaynak="$DOTFILES/cihaza-ozel/hybrid-gpu" pci="0000:65:00.0"
+  if [ "$(cat "/sys/bus/pci/devices/$pci/vendor" 2>/dev/null)" != 0x1002 ]; then
+    uyari "$pci adresinde AMD GPU yok; bu cihazda hybrid-gpu ayarı atlandı (kural dosyasındaki adresi düzenle)"
+    return
+  fi
+  bilgi "udev kuralı kuruluyor"
+  sudo install -m 644 "$kaynak/61-igpu.rules" /etc/udev/rules.d/61-igpu.rules
+  sudo udevadm control --reload
+  sudo udevadm trigger --action=add --subsystem-match=drm
+  sudo udevadm settle
+  # Bağlantı oluşmadan KWin ayarı yazılmaz: yanlış yol oturumun açılmasını engeller.
+  if [ ! -e /dev/dri/igpu ]; then
+    uyari "/dev/dri/igpu oluşmadı; KWin ayarı yazılmadı"
+    return
+  fi
+  mkdir -p "$HOME/.config/environment.d" "$HOME/.local/bin" "$HOME/.local/share/applications"
+  ln -sfn "$kaynak/kwin-gpu.conf" "$HOME/.config/environment.d/kwin-gpu.conf"
+  # gpu-run: güç profiline göre iGPU/dGPU seçen başlatıcı; Steam onun üzerinden açılır.
+  ln -sfn "$kaynak/gpu-run" "$HOME/.local/bin/gpu-run"
+  ln -sfn "$kaynak/steam.desktop" "$HOME/.local/share/applications/steam.desktop"
+  # gpu-profil-izle: profil değişince Steam yeniden açılmalıysa bildirim gönderir.
+  ln -sfn "$kaynak/gpu-profil-izle" "$HOME/.local/bin/gpu-profil-izle"
+  mkdir -p "$HOME/.config/systemd/user"
+  ln -sfn "$kaynak/gpu-profil-izle.service" "$HOME/.config/systemd/user/gpu-profil-izle.service"
+  systemctl --user daemon-reload
+  systemctl --user enable --now gpu-profil-izle.service || uyari "gpu-profil-izle servisi başlatılamadı (grafik oturumu dışında olabilir)"
+  bilgi "KWin iGPU'ya sabitlendi. Çıkış yapıp tekrar gir."
+}
+
+durum_paket=1; durum_hybrid=0
+for arg in "$@"; do
+  case "$arg" in
+    --sadece-baglanti) durum_paket=0 ;;
+    --hybrid-gpu) durum_hybrid=1 ;;
+    *) uyari "Bilinmeyen seçenek: $arg" ;;
+  esac
+done
+
+[ "$durum_paket" = 0 ] || { paketleri_kur; pokemon_kur; }
 for p in kitty fish; do bagla "$p"; done
+[ "$durum_hybrid" = 0 ] || hybrid_gpu_kur
 
 # $SHELL o anki oturumdan gelir; asıl giriş kabuğu passwd kaydındadır.
 giris_kabugu="$(getent passwd "$(id -un)" | cut -d: -f7)"
