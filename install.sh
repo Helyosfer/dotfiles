@@ -74,13 +74,24 @@ bagla() {
 # KWIN_DRM_DEVICES ':' ile bölündüğü için by-path yolu kullanılamaz; udev kuralı
 # iGPU için ':' içermeyen /dev/dri/igpu bağlantısını üretir.
 hybrid_gpu_kur() {
-  local kaynak="$DOTFILES/cihaza-ozel/hybrid-gpu" pci="0000:65:00.0"
-  if [ "$(cat "/sys/bus/pci/devices/$pci/vendor" 2>/dev/null)" != 0x1002 ]; then
-    uyari "$pci adresinde AMD GPU yok; bu cihazda hybrid-gpu ayarı atlandı (kural dosyasındaki adresi düzenle)"
+  local kaynak="$DOTFILES/cihaza-ozel/hybrid-gpu" pci="" d kural
+  # AMD ekran denetleyicisini (vendor 0x1002, sınıf 0x03xxxx) PCI'dan bul; adres makineye göre değişir.
+  for d in /sys/bus/pci/devices/*; do
+    if [ "$(cat "$d/vendor" 2>/dev/null)" = 0x1002 ] && [[ "$(cat "$d/class" 2>/dev/null)" == 0x03* ]]; then
+      pci="$(basename "$d")"
+      break
+    fi
+  done
+  if [ -z "$pci" ]; then
+    uyari "AMD GPU bulunamadı; bu cihazda hybrid-gpu ayarı atlandı"
     return
   fi
+  bilgi "AMD GPU bulundu: $pci"
   bilgi "udev kuralı kuruluyor"
-  sudo install -m 644 "$kaynak/61-igpu.rules" /etc/udev/rules.d/61-igpu.rules
+  kural="$(mktemp)"
+  sed "s/0000:65:00\.0/$pci/" "$kaynak/61-igpu.rules" > "$kural"
+  sudo install -m 644 "$kural" /etc/udev/rules.d/61-igpu.rules
+  rm -f "$kural"
   sudo udevadm control --reload
   sudo udevadm trigger --action=add --subsystem-match=drm
   sudo udevadm settle
@@ -103,18 +114,77 @@ hybrid_gpu_kur() {
   bilgi "KWin iGPU'ya sabitlendi. Çıkış yapıp tekrar gir."
 }
 
-durum_paket=1; durum_hybrid=0
+# --- 5. Cihaza özgü: ASUS TUF A16 (parlaklık servisi + klavye RGB) ----------
+# Yalnızca --asus-tuf ile çalışır. Sistem dosyalarını /etc ve /usr/local altına KOPYALAR.
+asus_tuf_kur() {
+  local kaynak="$DOTFILES/cihaza-ozel/asus-tuf"
+  bilgi "ASUS TUF dosyaları kuruluyor (sudo ister)"
+  sudo install -m 755 "$kaynak/klavye-rgb" /usr/local/bin/klavye-rgb
+  sudo install -m 644 "$kaynak/klavye-rgb.service" "$kaynak/screen-auto-brightness.service" /etc/systemd/system/
+  sudo install -m 644 "$kaynak/61-klavye-rgb.rules" /etc/udev/rules.d/61-klavye-rgb.rules
+  sudo udevadm control --reload
+  sudo udevadm trigger --subsystem-match=hidraw --action=add
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now screen-auto-brightness.service || uyari "screen-auto-brightness.service başlatılamadı (bu cihazda asus-armoury yolu olmayabilir)"
+  sudo systemctl enable --now klavye-rgb.service || uyari "klavye-rgb.service başlatılamadı (denetleyici bulunamadı mı? 'klavye-rgb bilgi' ile bak)"
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$kaynak/klavye-rgb" "$HOME/.local/bin/klavye-rgb"
+  bilgi "Klavye rengi: klavye-rgb sonraki | onceki | renk R G B | varsayilan"
+}
+
+# Bu betik ASUS TUF Gaming A16 (FA608UM) için yazıldı; başka modelde cihaza özgü kısımları
+# çalıştırmadan önce uyarır ve onay ister (--zorla ile atlanır).
+model_kontrol() {
+  local model
+  model="$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)"
+  case "$model" in
+    *FA608UM*) return 0 ;;
+  esac
+  uyari "Bu cihaz: '${model:-bilinmiyor}'. Cihaza özgü ayarlar ASUS TUF Gaming A16 (FA608UM) içindir."
+  [ "$durum_zorla" = 1 ] && return 0
+  if [ -t 0 ]; then
+    read -r -p "Yine de devam edilsin mi? [e/H] " cevap
+    case "$cevap" in e|E|evet) return 0 ;; esac
+  fi
+  uyari "Cihaza özgü ayarlar atlandı (zorlamak için --zorla)"
+  return 1
+}
+
+kullanim() {
+  cat <<'EOF'
+Kullanım: ./install.sh [seçenekler]
+
+  (seçeneksiz)       Paketler + pokemon + kitty/fish ayarları
+  --sadece-baglanti  Paket kurma, yalnızca ayar dosyalarını bağla
+  --hybrid-gpu       iGPU/dGPU ayarı (dGPU boşta uyusun; sudo ister)
+  --asus-tuf         Parlaklık servisi + klavye RGB (sudo ister)
+  --hepsi            Hepsi: paketler, bağlantılar, hybrid-gpu, asus-tuf
+  --zorla            Model kontrolünü sormadan geç
+  -h, --help         Bu yardım
+EOF
+}
+
+durum_paket=1; durum_hybrid=0; durum_asus=0; durum_zorla=0
 for arg in "$@"; do
   case "$arg" in
     --sadece-baglanti) durum_paket=0 ;;
     --hybrid-gpu) durum_hybrid=1 ;;
-    *) uyari "Bilinmeyen seçenek: $arg" ;;
+    --asus-tuf) durum_asus=1 ;;
+    --hepsi) durum_hybrid=1; durum_asus=1 ;;
+    --zorla) durum_zorla=1 ;;
+    -h|--help) kullanim; exit 0 ;;
+    *) uyari "Bilinmeyen seçenek: $arg"; kullanim; exit 1 ;;
   esac
 done
+
+if [ "$durum_hybrid" = 1 ] || [ "$durum_asus" = 1 ]; then
+  model_kontrol || { durum_hybrid=0; durum_asus=0; }
+fi
 
 [ "$durum_paket" = 0 ] || { paketleri_kur; pokemon_kur; }
 for p in kitty fish; do bagla "$p"; done
 [ "$durum_hybrid" = 0 ] || hybrid_gpu_kur
+[ "$durum_asus" = 0 ] || asus_tuf_kur
 
 # $SHELL o anki oturumdan gelir; asıl giriş kabuğu passwd kaydındadır.
 giris_kabugu="$(getent passwd "$(id -un)" | cut -d: -f7)"
