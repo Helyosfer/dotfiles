@@ -81,7 +81,6 @@ cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status   # "suspended" = iyi
 | `cihaza-ozel/asus-tuf/` | Klavye RGB ve parlaklık servisleri |
 | `kitty/`, `fish/` | Terminal ve kabuk ayarlarım |
 | `kde/`, `packages/` | KDE ayarları anlık görüntüsü (`kde/guncelle.sh` yeniler) ve pacman/AUR paket listeleri |
-| `hypr/` | Hyprland kullanıcı ayarı: Türkçe klavye, CachyOS kısayolları, Alt+Enter tarayıcı (HyDE en son yükler) |
 
 Sistem dosyaları (`/etc`, `/usr/local`) **kopyadır**. Burada bir dosyayı düzenleyince `install.sh`'ı tekrar çalıştır.
 

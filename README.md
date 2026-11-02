@@ -81,7 +81,6 @@ cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status   # "suspended" = goo
 | `cihaza-ozel/asus-tuf/` | Keyboard RGB and brightness services |
 | `kitty/`, `fish/` | My terminal and shell config |
 | `kde/`, `packages/` | KDE settings snapshot (`kde/guncelle.sh` refreshes it) and pacman/AUR package lists |
-| `hypr/` | Hyprland user config: Turkish keyboard, CachyOS keybinds, Alt+Enter browser (HyDE loads it last) |
 
 System files (`/etc`, `/usr/local`) are **copies**. After you edit a file here, run `install.sh` again.
 
