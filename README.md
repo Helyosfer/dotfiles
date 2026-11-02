@@ -65,6 +65,7 @@ cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status   # "suspended" = goo
 
 ## Good to know
 
+- **Fn+F5 cycles the power profile** (quiet / balanced / performance) on its own, no setup needed. The profile sets the fan: Quiet idles at 0 RPM, Performance runs the fan hard.
 - The power profile is read when an app **starts**. Start Steam in Balanced or Power Saver, otherwise it keeps the dGPU awake.
 - An external monitor on the dGPU ports won't work while KWin is pinned to the iGPU. Delete `~/.config/environment.d/kwin-gpu.conf` and log in again.
 - Fan curves are not supported on this model in Linux, and `asusctl` does not support this keyboard, so it is not used.
@@ -79,10 +80,11 @@ cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status   # "suspended" = goo
 | `cihaza-ozel/hybrid-gpu/` | GPU setup (`gpu-run`, KWin, Steam launcher) |
 | `cihaza-ozel/asus-tuf/` | Keyboard RGB and brightness services |
 | `kitty/`, `fish/` | My terminal and shell config |
+| `kde/`, `packages/` | KDE settings snapshot (`kde/guncelle.sh` refreshes it) and pacman/AUR package lists |
 
 System files (`/etc`, `/usr/local`) are **copies**. After you edit a file here, run `install.sh` again.
 
-Not in the repo on purpose: SSH keys, VPN settings, KDE window rules.
+Not in the repo on purpose: SSH keys, VPN settings, KDE window rules, monitor layout.
 
 ## License
 

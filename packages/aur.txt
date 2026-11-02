@@ -1,0 +1,12 @@
+antigravity
+antigravity-cli
+brave-bin
+chatgpt-desktop
+claude-code
+claude-desktop
+proton-authenticator-bin
+proton-mail-bin
+proton-pass-bin
+visual-studio-code-bin
+yay
+zapzap

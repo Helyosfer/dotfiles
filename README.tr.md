@@ -65,6 +65,7 @@ cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status   # "suspended" = iyi
 
 ## Bilmekte fayda var
 
+- **Fn+F5 güç profilini döndürür** (quiet / balanced / performance), kurulum gerekmez. Fanı profil belirler: Quiet boşta 0 RPM, Performance fanı sert çalıştırır.
 - Güç profili uygulama **başlarken** okunur. Steam'i Balanced ya da Power Save'de aç, yoksa dGPU'yu uyanık tutar.
 - dGPU portlarına bağlı harici ekran, KWin iGPU'ya sabitliyken çalışmaz. `~/.config/environment.d/kwin-gpu.conf` dosyasını sil, yeniden giriş yap.
 - Bu modelde fan eğrisi Linux'ta desteklenmiyor, `asusctl` de bu klavyeyi tanımıyor; o yüzden kullanılmadı.
@@ -79,10 +80,11 @@ cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status   # "suspended" = iyi
 | `cihaza-ozel/hybrid-gpu/` | GPU ayarı (`gpu-run`, KWin, Steam başlatıcı) |
 | `cihaza-ozel/asus-tuf/` | Klavye RGB ve parlaklık servisleri |
 | `kitty/`, `fish/` | Terminal ve kabuk ayarlarım |
+| `kde/`, `packages/` | KDE ayarları anlık görüntüsü (`kde/guncelle.sh` yeniler) ve pacman/AUR paket listeleri |
 
 Sistem dosyaları (`/etc`, `/usr/local`) **kopyadır**. Burada bir dosyayı düzenleyince `install.sh`'ı tekrar çalıştır.
 
-Bilerek depoda olmayanlar: SSH anahtarları, VPN ayarları, KDE pencere kuralları.
+Bilerek depoda olmayanlar: SSH anahtarları, VPN ayarları, KDE pencere kuralları, monitör düzeni.
 
 ## Lisans
 
